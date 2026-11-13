@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pokémon-Sammlung</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="ball" aria-hidden="true"></span>
+      <h1>Pokémon-Sammlung</h1>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="collection" role="tab">Sammlung</button>
+      <button class="tab" data-view="search" role="tab">Karten suchen</button>
+      <button class="tab" data-view="wishlist" role="tab">Wunschliste</button>
+      <button class="tab" data-view="stats" role="tab">Statistik</button>
+      <button class="tab" data-view="settings" role="tab">Einstellungen</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- SAMMLUNG -->
+    <section id="view-collection" class="view active">
+      <div class="summary" id="collection-summary"></div>
+      <div class="toolbar">
+        <input type="search" id="col-filter" placeholder="In Sammlung suchen (Name, Set, Nummer)…">
+        <select id="col-owner"></select>
+        <select id="col-set"><option value="">Alle Sets</option></select>
+        <select id="col-sort">
+          <option value="added">Neueste zuerst</option>
+          <option value="value">Wert (hoch → niedrig)</option>
+          <option value="name">Name (A → Z)</option>
+          <option value="rating">Bewertung</option>
+          <option value="set">Set &amp; Nummer</option>
+        </select>
+        <label class="check"><input type="checkbox" id="col-fav"> nur Favoriten</label>
+      </div>
+      <div class="grid" id="collection-grid"></div>
+      <p class="empty" id="collection-empty" hidden>
+        Noch keine Karten hier. Geh auf <strong>Karten suchen</strong> und füge deine erste Karte hinzu!
+      </p>
+    </section>
+
+    <!-- SUCHE -->
+    <section id="view-search" class="view">
+      <form class="toolbar" id="search-form">
+        <input type="search" id="search-q" placeholder="Kartenname, z. B. Glurak, Pikachu, Mewtu …" required>
+        <input type="text" id="search-num" placeholder="Nr. (optional)" class="short">
+        <select id="search-lang">
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+        </select>
+        <button type="submit" class="primary">Suchen</button>
+      </form>
+      <p class="hint">Tipp: Die Nummer steht unten auf der Karte (z. B. <em>4/102</em> → 4 eingeben).</p>
+      <div class="status" id="search-status"></div>
+      <div class="grid" id="search-grid"></div>
+      <p class="hint">Karte nicht gefunden? <button class="link" id="manual-add">Karte manuell eintragen</button></p>
+    </section>
+
+    <!-- WUNSCHLISTE -->
+    <section id="view-wishlist" class="view">
+      <div class="summary" id="wishlist-summary"></div>
+      <div class="grid" id="wishlist-grid"></div>
+      <p class="empty" id="wishlist-empty" hidden>Die Wunschliste ist leer. Bei der Suche kannst du Karten „auf die Wunschliste“ setzen.</p>
+    </section>
+
+    <!-- STATISTIK -->
+    <section id="view-stats" class="view">
+      <div id="stats-content"></div>
+    </section>
+
+    <!-- EINSTELLUNGEN -->
+    <section id="view-settings" class="view">
+      <div class="panel">
+        <h2>Sammler</h2>
+        <p class="hint">Jeder von uns bekommt ein eigenes Profil – so sieht man, wem welche Karte gehört.</p>
+        <ul class="owners" id="owner-list"></ul>
+        <form class="toolbar" id="owner-form">
+          <input type="text" id="owner-name" placeholder="Name des Sammlers" required maxlength="30">
+          <button class="primary" type="submit">Hinzufügen</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Preise</h2>
+        <p class="hint">Marktpreise kommen von Cardmarket (über TCGdex), Trendpreis in EUR. Sie werden beim Hinzufügen gespeichert und können hier aktualisiert werden.</p>
+        <button id="refresh-prices" class="primary">Alle Preise aktualisieren</button>
+        <span class="status" id="refresh-status"></span>
+      </div>
+      <div class="panel">
+        <h2>Daten sichern</h2>
+        <p class="hint">Die Sammlung wird nur in diesem Browser gespeichert. Exportiere regelmäßig eine Sicherung – mit der Datei könnt ihr die Sammlung auch auf ein anderes Gerät übertragen.</p>
+        <div class="toolbar">
+          <button id="export-btn">Sicherung exportieren (.json)</button>
+          <button id="export-csv">Als CSV exportieren</button>
+          <label class="button">Sicherung importieren<input type="file" id="import-file" accept="application/json,.json" hidden></label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dialog: Karte hinzufügen / bearbeiten -->
+  <dialog id="card-dialog">
+    <form method="dialog" id="card-form">
+      <div class="dlg-body">
+        <div class="dlg-image"><img id="dlg-img" alt=""></div>
+        <div class="dlg-fields">
+          <h2 id="dlg-title">Karte</h2>
+          <p class="meta" id="dlg-meta"></p>
+          <p class="price-line" id="dlg-price"></p>
+
+          <div class="manual-only" id="manual-fields">
+            <label>Name <input type="text" name="name"></label>
+            <label>Set <input type="text" name="setName"></label>
+            <label>Nummer <input type="text" name="number"></label>
+            <label>Seltenheit <input type="text" name="rarity"></label>
+          </div>
+
+          <div class="row">
+            <label>Gehört
+              <select name="owner" id="dlg-owner"></select>
+            </label>
+            <label>Anzahl
+              <input type="number" name="qty" min="1" value="1">
+            </label>
+          </div>
+          <div class="row">
+            <label>Zustand
+              <select name="condition">
+                <option value="MT">Mint (MT)</option>
+                <option value="NM" selected>Near Mint (NM)</option>
+                <option value="EX">Excellent (EX)</option>
+                <option value="GD">Good (GD)</option>
+                <option value="LP">Light Played (LP)</option>
+                <option value="PL">Played (PL)</option>
+                <option value="PO">Poor (PO)</option>
+              </select>
+            </label>
+            <label>Variante
+              <select name="variant" id="dlg-variant">
+                <option value="normal">Normal</option>
+                <option value="reverse">Reverse Holo</option>
+                <option value="holo">Holo</option>
+                <option value="firstEdition">1. Edition</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label>Kartensprache
+              <select name="cardLanguage">
+                <option value="de">Deutsch</option>
+                <option value="en">Englisch</option>
+                <option value="jp">Japanisch</option>
+                <option value="other">Andere</option>
+              </select>
+            </label>
+            <label>Gradiert (PSA etc.)
+              <input type="text" name="grade" placeholder="z. B. PSA 9">
+            </label>
+          </div>
+          <div class="row">
+            <label>Kaufpreis (€)
+              <input type="number" name="purchasePrice" step="0.01" min="0" placeholder="optional">
+            </label>
+            <label>Eigener Wert (€)
+              <input type="number" name="manualValue" step="0.01" min="0" placeholder="überschreibt Marktpreis">
+            </label>
+          </div>
+          <div class="field">
+            <span class="label">Unsere Bewertung</span>
+            <div class="stars" id="dlg-stars" role="radiogroup" aria-label="Bewertung"></div>
+          </div>
+          <label>Notiz
+            <textarea name="note" rows="2" placeholder="z. B. Aus dem Booster vom Geburtstag"></textarea>
+          </label>
+          <div class="row checks">
+            <label class="check"><input type="checkbox" name="favorite"> Favorit ★</label>
+            <label class="check"><input type="checkbox" name="wishlist"> Nur Wunschliste (noch nicht im Besitz)</label>
+          </div>
+        </div>
+      </div>
+      <div class="dlg-actions">
+        <button type="button" class="danger" id="dlg-delete" hidden>Löschen</button>
+        <span class="spacer"></span>
+        <button type="button" id="dlg-cancel">Abbrechen</button>
+        <button type="submit" class="primary" id="dlg-save">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
