@@ -56,6 +56,20 @@
         <button type="submit" class="primary">Suchen</button>
       </form>
       <p class="hint">Tipp: Die Nummer steht unten auf der Karte (z. B. <em>4/102</em> → 4 eingeben).</p>
+      <details class="panel bulk">
+        <summary><strong>Mehrere Karten auf einmal eintragen</strong> <span class="hint">– z. B. die Liste, die Claude aus euren Fotos erstellt</span></summary>
+        <form id="bulk-form">
+          <p class="hint">Eine Karte pro Zeile: Karten-ID, Anzahl, optional Variante (holo, reverse, 1st) und Zustand (NM, EX …).</p>
+          <textarea id="bulk-text" rows="6" placeholder="swsh3-20 1 holo&#10;sv03.5-025 2&#10;base1-4 1 holo EX"></textarea>
+          <div class="toolbar">
+            <label class="check">Gehört <select id="bulk-owner"></select></label>
+            <label class="check"><input type="checkbox" id="bulk-wishlist"> auf die Wunschliste</label>
+            <span class="spacer"></span>
+            <button type="submit" class="primary">Karten eintragen</button>
+          </div>
+          <div class="status" id="bulk-status"></div>
+        </form>
+      </details>
       <div class="status" id="search-status"></div>
       <div class="grid" id="search-grid"></div>
       <p class="hint">Karte nicht gefunden? <button class="link" id="manual-add">Karte manuell eintragen</button></p>

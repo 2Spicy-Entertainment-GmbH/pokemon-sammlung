@@ -94,7 +94,8 @@
   function pickPrice(pricing, variant) {
     const cm = pricing?.cardmarket;
     if (!cm) return null;
-    const holoish = variant === 'reverse' || variant === 'holo';
+    // Bei Cardmarket meinen die "-holo"-Felder die Reverse-Holo-Version; Holo-Karten haben den normalen Preis.
+    const holoish = variant === 'reverse';
     const get = (k) => (typeof cm[k] === 'number' && cm[k] > 0 ? cm[k] : null);
     const value = holoish
       ? get('trend-holo') ?? get('avg-holo') ?? get('trend') ?? get('avg')
@@ -143,7 +144,7 @@
     else if (currentView === 'wishlist') renderWishlist();
     else if (currentView === 'stats') renderStats();
     else if (currentView === 'settings') renderSettings();
-    else if (currentView === 'search') refreshSearchOwnedTags();
+    else if (currentView === 'search') { refreshSearchOwnedTags(); fillOwnerSelect($('#bulk-owner'), { value: $('#bulk-owner').value }); }
   }
 
   // ---------- Karten-Kachel ----------
@@ -312,6 +313,78 @@
 
   $('#manual-add').addEventListener('click', () => openItemDialog(null, { manual: true }));
 
+  // ---------- Listen-Import (z. B. von Claude aus Fotos erkannt) ----------
+  const VARIANT_WORDS = { normal: 'normal', reverse: 'reverse', 'reverse-holo': 'reverse', rh: 'reverse', holo: 'holo', '1st': 'firstEdition', '1.edition': 'firstEdition', firstedition: 'firstEdition', erstedition: 'firstEdition' };
+
+  /** Liest Zeilen wie "swsh3-20 2 holo NM" oder JSON. Liefert [{cardId, qty, variant?, condition?, lang?}]. */
+  function parseImportList(text) {
+    const t = text.trim();
+    if (!t) return [];
+    if (t.startsWith('{') || t.startsWith('[')) {
+      const j = JSON.parse(t);
+      const arr = Array.isArray(j) ? j : j.cards;
+      if (!Array.isArray(arr)) throw new Error('JSON enthält keine Kartenliste');
+      return arr.map((c) => ({ cardId: String(c.cardId || c.id || '').trim(), qty: Math.max(1, parseInt(c.qty, 10) || 1),
+        variant: VARIANT_WORDS[String(c.variant || '').toLowerCase()] || null, condition: CONDITIONS[String(c.condition || '').toUpperCase()] ? String(c.condition).toUpperCase() : null,
+        lang: c.lang === 'en' ? 'en' : null })).filter((c) => c.cardId);
+    }
+    return t.split(/\r?\n/).map((line) => line.replace(/#.*$/, '').trim()).filter(Boolean).map((line) => {
+      const parts = line.split(/[\s,;]+/);
+      const entry = { cardId: parts[0], qty: 1, variant: null, condition: null, lang: null };
+      parts.slice(1).forEach((p) => {
+        const w = p.toLowerCase().replace(/^x/, '');
+        if (/^\d+$/.test(w)) entry.qty = Math.max(1, parseInt(w, 10));
+        else if (/^\d+x$/.test(w)) entry.qty = Math.max(1, parseInt(w, 10));
+        else if (VARIANT_WORDS[w]) entry.variant = VARIANT_WORDS[w];
+        else if (CONDITIONS[p.toUpperCase()]) entry.condition = p.toUpperCase();
+        else if (w === 'en' || w === 'de') entry.lang = w;
+      });
+      return entry;
+    });
+  }
+
+  $('#bulk-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = $('#bulk-status');
+    const btn = $('#bulk-form button[type=submit]');
+    let entries;
+    try { entries = parseImportList($('#bulk-text').value); }
+    catch (err) { status.textContent = 'Die Liste konnte nicht gelesen werden: ' + err.message; return; }
+    if (!entries.length) { status.textContent = 'Bitte zuerst eine Liste einfügen.'; return; }
+    const owner = $('#bulk-owner').value;
+    const fallbackLang = $('#search-lang').value;
+    const wishlist = $('#bulk-wishlist').checked;
+    btn.disabled = true;
+    const failed = [];
+    let cards = 0;
+    for (let n = 0; n < entries.length; n++) {
+      const en = entries[n];
+      status.textContent = `Lade ${n + 1} / ${entries.length} …`;
+      try {
+        const lang = en.lang || fallbackLang;
+        let c = await getCard(en.cardId, lang);
+        let usedLang = lang;
+        if (!c && lang !== 'en') { c = await getCard(en.cardId, 'en'); usedLang = 'en'; }
+        if (!c) { failed.push(en.cardId); continue; }
+        c = await withImage(c);
+        const d = cardToDraft(c, usedLang);
+        const variant = en.variant || d.variant;
+        addOrMerge({
+          id: uid(), ...d, variant, owner, qty: en.qty, condition: en.condition || 'NM', cardLanguage: lang,
+          grade: '', purchasePrice: null, manualValue: null, note: '', favorite: false, wishlist, rating: 0,
+          price: pickPrice(c.pricing, variant), addedAt: new Date().toISOString(),
+        });
+        cards += en.qty;
+      } catch (err) { console.error(err); failed.push(en.cardId); }
+    }
+    save();
+    btn.disabled = false;
+    status.textContent = `${cards} Karte(n) hinzugefügt.` + (failed.length ? ` Nicht gefunden: ${failed.join(', ')}` : '');
+    if (!failed.length) $('#bulk-text').value = '';
+    toast(`${cards} Karte(n) importiert`);
+    refreshSearchOwnedTags();
+  });
+
   // ---------- Dialog ----------
   const dlg = $('#card-dialog');
   const form = $('#card-form');
@@ -333,29 +406,53 @@
     renderStars();
   });
 
+  function defaultVariantFor(variants = {}) {
+    if (variants.normal === false && variants.holo) return 'holo';
+    if (variants.normal === false && variants.reverse) return 'reverse';
+    return 'normal';
+  }
+  function cardToDraft(c, lang) {
+    const variants = c.variants || {};
+    return {
+      cardId: c.id,
+      apiLang: lang,
+      name: c.name,
+      setId: c.set?.id || '',
+      setName: c.set?.name || '',
+      number: c.localId + (c.set?.cardCount?.official ? '/' + c.set.cardCount.official : ''),
+      rarity: c.rarity || '',
+      image: c.image || '',
+      types: c.types || [],
+      variants,
+      variant: defaultVariantFor(variants),
+      cardLanguage: lang,
+    };
+  }
+
+  /** Fügt ein Item hinzu oder erhöht die Anzahl einer identischen Karte. Gibt das betroffene Item zurück. */
+  function addOrMerge(item) {
+    const twin = item.cardId && state.items.find((i) => i.cardId === item.cardId && i.owner === item.owner &&
+      i.condition === item.condition && i.variant === item.variant && !!i.wishlist === !!item.wishlist && (i.grade || '') === (item.grade || ''));
+    if (twin) { twin.qty += item.qty; return { item: twin, merged: true }; }
+    state.items.push(item);
+    return { item, merged: false };
+  }
+
+  /** Wenn eine Karte in der gewählten Sprache kein Bild hat, das englische nehmen. */
+  async function withImage(c) {
+    if (!c || c.image) return c;
+    try { const en = await getCard(c.id, 'en'); if (en?.image) return { ...c, image: en.image }; } catch { /* egal */ }
+    return c;
+  }
+
   async function openNewCardDialog(cardId, lang) {
     $('#search-status').textContent = 'Lade Kartendetails …';
     try {
-      const c = await getCard(cardId, lang);
+      const c = await withImage(await getCard(cardId, lang));
       if (!c) throw new Error('Karte nicht gefunden');
       $('#search-status').textContent = '';
       draftPricing = c.pricing || null;
-      const variants = c.variants || {};
-      const defaultVariant = variants.normal === false && variants.holo ? 'holo' : 'normal';
-      draft = {
-        cardId: c.id,
-        apiLang: lang,
-        name: c.name,
-        setId: c.set?.id || '',
-        setName: c.set?.name || '',
-        number: c.localId + (c.set?.cardCount?.official ? '/' + c.set.cardCount.official : ''),
-        rarity: c.rarity || '',
-        image: c.image || '',
-        types: c.types || [],
-        variants,
-        variant: defaultVariant,
-        cardLanguage: lang,
-      };
+      draft = cardToDraft(c, lang);
       openItemDialog(null);
     } catch (err) {
       console.error(err);
@@ -489,15 +586,9 @@
         addedAt: new Date().toISOString(),
       };
       // Gleiche Karte (gleicher Besitzer/Zustand/Variante) zusammenfassen statt doppelt anlegen
-      const twin = item.cardId && state.items.find((i) => i.cardId === item.cardId && i.owner === item.owner &&
-        i.condition === item.condition && i.variant === item.variant && i.wishlist === item.wishlist && i.grade === item.grade);
-      if (twin) {
-        twin.qty += item.qty;
-        toast(`Anzahl erhöht: ${twin.name} ×${twin.qty}`);
-      } else {
-        state.items.push(item);
-        toast(item.wishlist ? 'Auf die Wunschliste gesetzt' : `${item.name} hinzugefügt`);
-      }
+      const r = addOrMerge(item);
+      if (r.merged) toast(`Anzahl erhöht: ${r.item.name} ×${r.item.qty}`);
+      else toast(item.wishlist ? 'Auf die Wunschliste gesetzt' : `${item.name} hinzugefügt`);
     }
     save();
     dlg.close();
