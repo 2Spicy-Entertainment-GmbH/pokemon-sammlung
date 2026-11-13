@@ -2,7 +2,15 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e3350d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Sammlung">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
   <title>Pokémon-Sammlung</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -11,14 +19,15 @@
     <div class="brand">
       <span class="ball" aria-hidden="true"></span>
       <h1>Pokémon-Sammlung</h1>
+      <button class="icon-btn settings-btn" data-view="settings" aria-label="Einstellungen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
     </div>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-view="collection" role="tab">Sammlung</button>
-      <button class="tab" data-view="scan" role="tab">Foto-Scan</button>
-      <button class="tab" data-view="search" role="tab">Karten suchen</button>
-      <button class="tab" data-view="wishlist" role="tab">Wunschliste</button>
-      <button class="tab" data-view="stats" role="tab">Statistik</button>
-      <button class="tab" data-view="settings" role="tab">Einstellungen</button>
+    <nav class="tabs" role="tablist" aria-label="Bereiche">
+      <button class="tab active" data-view="collection" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="10" rx="1.5"/><rect x="14" y="4" width="7" height="10" rx="1.5"/><path d="M3 18h18M3 21h18"/></svg><span>Sammlung</span></button>
+      <button class="tab" data-view="scan" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.5"/></svg><span>Scannen</span></button>
+      <button class="tab" data-view="search" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span>Suchen</span></button>
+      <button class="tab" data-view="wishlist" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span>Wünsche</span></button>
+      <button class="tab" data-view="stats" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Statistik</span></button>
+      <button class="tab tab-settings" data-view="settings" role="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span>Einstellungen</span></button>
     </nav>
   </header>
 
@@ -26,20 +35,28 @@
     <!-- SAMMLUNG -->
     <section id="view-collection" class="view active">
       <div class="summary" id="collection-summary"></div>
-      <div class="toolbar">
-        <input type="search" id="col-filter" placeholder="In Sammlung suchen (Name, Set, Nummer)…">
-        <select id="col-owner"></select>
-        <select id="col-set"><option value="">Alle Sets</option></select>
-        <select id="col-sort">
+      <div class="toolbar col-toolbar">
+        <div class="search-row">
+          <input type="search" id="col-filter" placeholder="In der Sammlung suchen" enterkeyhint="search">
+          <button type="button" class="filter-toggle" id="col-filter-toggle" aria-expanded="false" aria-controls="col-filters">Filter</button>
+        </div>
+        <div class="filters" id="col-filters">
+        <select id="col-owner" aria-label="Sammler"></select>
+        <select id="col-set" aria-label="Set"><option value="">Alle Sets</option></select>
+        <select id="col-sort" aria-label="Sortierung">
           <option value="added">Neueste zuerst</option>
-          <option value="value">Wert (hoch → niedrig)</option>
+          <option value="value">Gesamtwert (hoch → niedrig)</option>
+          <option value="unit">Wert je Karte</option>
+          <option value="qty">Anzahl (meiste zuerst)</option>
           <option value="name">Name (A → Z)</option>
           <option value="rating">Bewertung</option>
           <option value="set">Set &amp; Nummer</option>
         </select>
         <label class="check"><input type="checkbox" id="col-fav"> nur Favoriten</label>
         <label class="check"><input type="checkbox" id="col-dupes"> nur doppelte</label>
+        </div>
       </div>
+      <p class="hint count-hint" id="col-count"></p>
       <div class="grid" id="collection-grid"></div>
       <p class="empty" id="collection-empty" hidden>
         Noch keine Karten hier. Geh auf <strong>Karten suchen</strong> und füge deine erste Karte hinzu!
@@ -75,12 +92,7 @@
         </div>
         <ul class="scan-photos" id="scan-photos"></ul>
         <div class="summary" id="scan-summary"></div>
-        <ul class="scan-results" id="scan-results"></ul>
-        <div class="panel" id="scan-unmatched" hidden>
-          <h3>Nicht eindeutig gefunden</h3>
-          <ul id="scan-unmatched-list" class="plain"></ul>
-        </div>
-        <div class="scan-footer">
+        <div class="scan-options">
           <label class="check">Gehört <select id="scan-owner"></select></label>
           <label class="check">Zustand
             <select id="scan-condition">
@@ -88,6 +100,13 @@
               <option value="GD">Good</option><option value="LP">Light Played</option><option value="PL">Played</option><option value="PO">Poor</option>
             </select>
           </label>
+        </div>
+        <ul class="scan-results" id="scan-results"></ul>
+        <div class="panel" id="scan-unmatched" hidden>
+          <h3>Nicht eindeutig gefunden</h3>
+          <ul id="scan-unmatched-list" class="plain"></ul>
+        </div>
+        <div class="scan-footer">
           <span class="spacer"></span>
           <button type="button" id="scan-clear" hidden>Liste leeren</button>
           <button type="button" class="primary" id="scan-add" disabled>Zur Sammlung hinzufügen</button>
@@ -151,7 +170,7 @@
       </div>
       <div class="panel">
         <h2>Foto-Scan (Claude)</h2>
-        <p class="hint">Für die Kartenerkennung per Foto. Der Schlüssel wird nur auf diesem Gerät gespeichert. <span id="scan-key-status"></span></p>
+        <p class="hint">Für die Kartenerkennung per Foto. <span id="scan-key-status"></span></p>
         <form class="toolbar" id="settings-key-form">
           <input type="password" id="settings-key" placeholder="Neuen Schlüssel eintragen (sk-ant-…)" autocomplete="off">
           <button type="submit">Speichern</button>
@@ -176,6 +195,31 @@
     </section>
   </main>
 
+  <!-- Dialog: eine Karte mit allen Exemplaren -->
+  <dialog id="group-dialog" aria-labelledby="gd-title">
+    <div class="dlg-wrap">
+      <div class="dlg-head">
+        <button type="button" class="icon-btn" id="gd-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="dlg-body">
+        <div class="dlg-image"><img id="gd-img" alt=""></div>
+        <div class="dlg-fields">
+          <h2 id="gd-title">Karte</h2>
+          <p class="meta" id="gd-meta"></p>
+          <div class="summary gd-total" id="gd-total"></div>
+          <p class="price-line" id="gd-price"></p>
+          <h3 class="gd-h">Eure Exemplare</h3>
+          <ul class="entries" id="gd-list"></ul>
+          <p class="hint">Antippen zum Bearbeiten (Zustand, Bewertung, Besitzer …). Mit − und + die Anzahl ändern.</p>
+        </div>
+      </div>
+      <div class="dlg-actions">
+        <span class="spacer"></span>
+        <button type="button" id="gd-add" class="primary">Weiteres Exemplar hinzufügen</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Dialog: Karte hinzufügen / bearbeiten -->
   <dialog id="card-dialog">
     <form method="dialog" id="card-form">
@@ -198,7 +242,7 @@
               <select name="owner" id="dlg-owner"></select>
             </label>
             <label>Anzahl
-              <input type="number" name="qty" min="1" value="1">
+              <input type="number" name="qty" min="1" value="1" inputmode="numeric">
             </label>
           </div>
           <div class="row">
@@ -237,10 +281,10 @@
           </div>
           <div class="row">
             <label>Kaufpreis (€)
-              <input type="number" name="purchasePrice" step="0.01" min="0" placeholder="optional">
+              <input type="number" name="purchasePrice" step="0.01" min="0" placeholder="optional" inputmode="decimal">
             </label>
             <label>Eigener Wert (€)
-              <input type="number" name="manualValue" step="0.01" min="0" placeholder="überschreibt Marktpreis">
+              <input type="number" name="manualValue" step="0.01" min="0" placeholder="überschreibt Marktpreis" inputmode="decimal">
             </label>
           </div>
           <div class="field">

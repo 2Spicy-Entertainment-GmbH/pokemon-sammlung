@@ -2,6 +2,12 @@
 
 Eine kleine Web-App, um unsere Pokémon-Karten zu verwalten: Was haben wir, wem gehört welche Karte, was ist sie wert, und wie finden wir sie?
 
+## Auf dem Handy
+
+Die App ist fürs Handy gebaut (Navigation unten, große Tippflächen, Dialoge im Vollbild). Man kann sie wie eine App auf den Homescreen legen:
+- **iPhone (Safari):** Teilen-Symbol → „Zum Home-Bildschirm“
+- **Android (Chrome):** Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“
+
 ## Starten
 
 Einfach `index.html` im Browser öffnen. Es gibt keinen Build-Schritt und keinen Server. Für die Kartensuche und die Preise braucht man Internet.
@@ -13,10 +19,11 @@ Zum Hosten (z. B. GitHub Pages, Netlify) reicht es, den Ordner `pokemon-sammlung
 - **Karten suchen** mit deutschen oder englischen Namen (z. B. „Glurak“), optional mit Kartennummer
 - **Zur Sammlung hinzufügen** mit Besitzer, Anzahl, Zustand (MT … PO), Variante (Normal/Reverse/Holo/1. Edition), Kartensprache, Grading (PSA …), Kaufpreis, eigenem Wert, Notiz und Favorit
 - **Bewerten**: eigene 1–5-Sterne-Bewertung und Marktwert (Cardmarket-Trendpreis in EUR, je nach Variante)
+- **Mehrfachkarten**: Jede Karte erscheint einmal mit Gesamtanzahl (z. B. „8×“), Wert je Karte und Gesamtwert. Antippen zeigt alle Exemplare (wem sie gehören, Zustand, Variante, Bewertung), die Anzahl lässt sich dort mit − und + ändern
 - **Mehrere Sammler**: jedes Familienmitglied mit eigener Farbe, filterbar
 - **Wunschliste** für Karten, die noch fehlen
 - **Statistik**: Gesamtwert, Gewinn/Verlust gegenüber dem Kaufpreis, wertvollste Karten, Wert pro Sammler, Sets, Seltenheiten, Typen
-- **Preise aktualisieren** auf Knopfdruck
+- **Preise automatisch aktuell**: Beim Öffnen der App werden Preise, die älter als einen Tag sind, im Hintergrund von Cardmarket nachgeladen (zusätzlich per Knopf in den Einstellungen)
 - **Foto-Scan**: Karten per Foto erkennen lassen, auch viele auf einmal (siehe unten)
 - **Mehrere Karten auf einmal** (Karten suchen → „Mehrere Karten auf einmal eintragen“): Liste mit Karten-IDs einfügen, die App holt Bilder und Preise selbst
 - **Manuell eintragen**, falls eine Karte nicht in der Datenbank steht

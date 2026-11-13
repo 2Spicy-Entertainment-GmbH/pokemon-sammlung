@@ -338,7 +338,7 @@ Identify every card front you can see and return them in the JSON format.
     const hasKey = !!getKey();
     $('#scan-setup').hidden = hasKey;
     $('#scan-main').hidden = !hasKey;
-    $('#scan-key-status').textContent = hasKey ? 'Schlüssel ist auf diesem Gerät gespeichert.' : 'Noch kein Schlüssel gespeichert.';
+    $('#scan-key-status').textContent = hasKey ? 'Ein Schlüssel ist auf diesem Gerät gespeichert (nur hier, nicht online).' : 'Noch kein Schlüssel gespeichert.';
     A.fillOwnerSelect($('#scan-owner'), { value: $('#scan-owner').value });
     renderPhotos();
     renderRows();
@@ -402,7 +402,6 @@ Identify every card front you can see and return them in the JSON format.
     renderScan();
   });
 
-  document.querySelector('[data-view=scan]').addEventListener('click', renderScan);
-  document.querySelector('[data-view=settings]').addEventListener('click', renderScan);
+  document.querySelectorAll('[data-view=scan], [data-view=settings]').forEach((el) => el.addEventListener('click', renderScan));
   renderScan();
 })();

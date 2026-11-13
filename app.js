@@ -132,12 +132,13 @@
   let currentView = 'collection';
   function showView(view) {
     currentView = view;
-    $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+    $$('[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+    window.scrollTo({ top: 0 });
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
     render();
-    if (view === 'search') $('#search-q').focus();
+    if (view === 'search' && window.matchMedia('(min-width: 641px)').matches) $('#search-q').focus();
   }
-  $$('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+  $$('[data-view]').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
 
   function render() {
     if (currentView === 'collection') renderCollection();
@@ -175,6 +176,129 @@
     return el;
   }
 
+  // ---------- Gruppen: eine Kachel pro Karte, egal wie viele Einträge ----------
+  const groupKey = (i) => i.cardId || i.id;
+  function groupItems(items) {
+    const map = new Map();
+    items.forEach((i) => {
+      const k = groupKey(i);
+      if (!map.has(k)) map.set(k, { key: k, items: [] });
+      map.get(k).items.push(i);
+    });
+    return [...map.values()].map((g) => {
+      const f = g.items[0];
+      const priced = g.items.filter((i) => unitValue(i) != null);
+      return Object.assign(g, {
+        first: f, name: f.name, setName: f.setName, number: f.number, image: f.image,
+        qty: g.items.reduce((s, i) => s + (i.qty || 1), 0),
+        value: g.items.reduce((s, i) => s + totalValue(i), 0),
+        unit: priced.length ? Math.min(...priced.map(unitValue)) : null,
+        unitMax: priced.length ? Math.max(...priced.map(unitValue)) : null,
+        rating: Math.max(0, ...g.items.map((i) => i.rating || 0)),
+        favorite: g.items.some((i) => i.favorite),
+        addedAt: g.items.map((i) => i.addedAt || '').sort().pop(),
+        owners: [...new Set(g.items.map((i) => i.owner))].map(ownerById).filter(Boolean),
+      });
+    });
+  }
+  function sortGroups(groups, mode) {
+    const by = {
+      added: (a, b) => (b.addedAt || '').localeCompare(a.addedAt || ''),
+      value: (a, b) => b.value - a.value || (b.unitMax ?? -1) - (a.unitMax ?? -1),
+      unit: (a, b) => (b.unitMax ?? -1) - (a.unitMax ?? -1),
+      qty: (a, b) => b.qty - a.qty || a.name.localeCompare(b.name, 'de'),
+      name: (a, b) => a.name.localeCompare(b.name, 'de'),
+      rating: (a, b) => b.rating - a.rating || a.name.localeCompare(b.name, 'de'),
+      set: (a, b) => (a.setName || '').localeCompare(b.setName || '', 'de') ||
+        String(a.number).localeCompare(String(b.number), 'de', { numeric: true }),
+    }[mode] || (() => 0);
+    return [...groups].sort(by);
+  }
+
+  function groupTile(g) {
+    if (g.items.length === 1 && g.qty === 1) return cardTile(g.first, { showOwner: state.owners.length > 1 });
+    const el = document.createElement('article');
+    el.className = 'card';
+    const unitTxt = g.unit == null ? '–' : (g.unit === g.unitMax ? fmtEur(g.unit) : `${fmtEur(g.unit)}–${fmtEur(g.unitMax)}`);
+    el.innerHTML = `
+      <div class="badges">
+        <span>${g.favorite ? '<span class="badge fav">★</span>' : ''}</span>
+        <span class="badge qty-badge">${g.qty}×</span>
+      </div>
+      <div class="img">${g.image ? `<img loading="lazy" alt="${esc(g.name)}" src="${esc(imageUrl(g.image))}">` : `<div class="noimg">${esc(g.name)}</div>`}</div>
+      <div class="body">
+        <div class="name" title="${esc(g.name)}">${esc(g.name)}</div>
+        <div class="sub">${esc(g.setName || '–')}${g.number ? ' · ' + esc(g.number) : ''}</div>
+        <div class="count-line"><strong>${g.qty}× vorhanden</strong>${g.items.length > 1 ? ` · ${g.items.length} Einträge` : ''}</div>
+        <div class="foot">
+          <span class="price">${fmtEur(g.value)}</span>
+          <span class="mini-stars">${starsText(g.rating)}</span>
+        </div>
+        <div class="sub">je ${unitTxt}</div>
+        ${state.owners.length > 1 ? `<div class="sub">${g.owners.map((o) => `<span class="owner-dot" style="background:${esc(o.color)}"></span>${esc(o.name)}`).join(' ')}</div>` : ''}
+      </div>`;
+    const img = $('img', el);
+    if (img) attachImgFallback(img);
+    el.addEventListener('click', () => openGroupDialog(g.key));
+    return el;
+  }
+
+  // ---------- Detail einer Karte mit allen Exemplaren ----------
+  const gdlg = $('#group-dialog');
+  let openGroup = null;
+  function openGroupDialog(key) {
+    openGroup = key;
+    renderGroupDialog();
+    if (!gdlg.open) gdlg.showModal();
+  }
+  function renderGroupDialog() {
+    if (!openGroup) return;
+    const items = state.items.filter((i) => !i.wishlist && groupKey(i) === openGroup);
+    if (!items.length) { gdlg.close(); return; }
+    const g = groupItems(items)[0];
+    const f = g.first;
+    $('#gd-img').src = f.image ? imageUrl(f.image, 'high') : '';
+    $('#gd-img').dataset.fallback = '';
+    $('#gd-title').textContent = f.name;
+    $('#gd-meta').textContent = [f.setName, f.number, f.rarity].filter(Boolean).join(' · ');
+    $('#gd-total').innerHTML = `
+      <div class="chip"><div class="k">Anzahl</div><div class="v">${g.qty}×</div></div>
+      <div class="chip"><div class="k">Gesamtwert</div><div class="v">${fmtEur(g.value)}</div></div>
+      <div class="chip"><div class="k">Bewertung</div><div class="v stars-v">${g.rating ? starsText(g.rating) : '–'}</div></div>`;
+    const p = f.price;
+    $('#gd-price').innerHTML = p?.value != null
+      ? `Marktpreis je Karte: <strong>${fmtEur(p.value)}</strong>${p.low != null ? ` · ab ${fmtEur(p.low)}` : ''}${p.avg30 != null ? ` · Ø 30 Tage ${fmtEur(p.avg30)}` : ''}<br><span class="hint">Cardmarket, Stand ${p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('de-DE') : '–'}</span>`
+      : 'Kein Marktpreis verfügbar.';
+    const list = $('#gd-list');
+    list.replaceChildren(...items.map((i) => {
+      const o = ownerById(i.owner);
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <button type="button" class="entry" aria-label="Bearbeiten">
+          <span class="e-main">${o ? `<span class="owner-dot" style="background:${esc(o.color)}"></span>${esc(o.name)}` : ''}
+            <span class="e-sub">${esc(CONDITIONS[i.condition] || '')}${i.variant !== 'normal' ? ' · ' + esc(VARIANTS[i.variant]) : ''}${i.grade ? ' · ' + esc(i.grade) : ''}${i.rating ? ' · <span class="mini-stars">' + starsText(i.rating) + '</span>' : ''}</span></span>
+          <span class="e-val">${fmtEur(totalValue(i))}<span class="e-sub">je ${fmtEur(unitValue(i))}</span></span>
+        </button>
+        <div class="stepper">
+          <button type="button" class="minus" aria-label="Eine weniger" ${i.qty <= 1 ? 'disabled' : ''}>−</button>
+          <span class="n">${i.qty}</span>
+          <button type="button" class="plus" aria-label="Eine mehr">+</button>
+        </div>`;
+      $('.entry', li).addEventListener('click', () => openItemDialog(i));
+      $('.minus', li).addEventListener('click', () => { if (i.qty > 1) { i.qty--; save(); renderGroupDialog(); render(); } });
+      $('.plus', li).addEventListener('click', () => { i.qty++; save(); renderGroupDialog(); render(); });
+      return li;
+    }));
+    $('#gd-add').hidden = !f.cardId;
+    $('#gd-add').onclick = () => openNewCardDialog(f.cardId, f.apiLang || 'de');
+  }
+  $('#gd-close').addEventListener('click', () => gdlg.close());
+  gdlg.addEventListener('close', () => { openGroup = null; });
+  $('#gd-img').addEventListener('error', () => {
+    const img = $('#gd-img');
+    if (img.dataset.fallback !== '1' && /\/(de|fr|it|es|pt)\//.test(img.src)) { img.dataset.fallback = '1'; img.src = img.src.replace(/\/(de|fr|it|es|pt)\//, '/en/'); }
+  });
+
   // ---------- Sammlung ----------
   function fillOwnerSelect(sel, { withAll = false, value } = {}) {
     sel.innerHTML = (withAll ? '<option value="">Alle Sammler</option>' : '') +
@@ -194,16 +318,16 @@
     return [...items].sort(by);
   }
 
-  function summaryChips(items) {
+  function summaryChips(items, distinct) {
     const cards = items.reduce((s, i) => s + (i.qty || 1), 0);
     const value = items.reduce((s, i) => s + totalValue(i), 0);
     const paid = items.reduce((s, i) => s + (Number(i.purchasePrice) || 0) * (i.qty || 1), 0);
     const chips = [
       ['Karten', cards.toLocaleString('de-DE')],
-      ['Verschiedene', items.length.toLocaleString('de-DE')],
+      ['Verschiedene', (distinct ?? new Set(items.map(groupKey)).size).toLocaleString('de-DE')],
       ['Gesamtwert', fmtEur(value)],
     ];
-    const extra = items.reduce((s, i) => s + Math.max(0, (i.qty || 1) - 1), 0);
+    const extra = cards - new Set(items.map(groupKey)).size;
     if (extra > 0) chips.push(['Doppelte', extra.toLocaleString('de-DE')]);
     if (paid > 0) chips.push(['Bezahlt', fmtEur(paid)]);
     return chips.map(([k, v]) => `<div class="chip"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
@@ -225,22 +349,32 @@
     // Doppelte: dieselbe Karte mehr als einmal (auch über Besitzer/Zustände hinweg)
     const dupes = {};
     owned.forEach((i) => { const k = i.cardId || i.id; dupes[k] = (dupes[k] || 0) + (i.qty || 1); });
-    let items = owned.filter((i) =>
+    const items = owned.filter((i) =>
       (!ownerSel.value || i.owner === ownerSel.value) &&
       (!setSel.value || i.setName === setSel.value) &&
       (!$('#col-fav').checked || i.favorite) &&
       (!$('#col-dupes').checked || dupes[i.cardId || i.id] > 1) &&
       (!q || [i.name, i.setName, i.number, i.rarity, i.note].some((f) => String(f || '').toLowerCase().includes(q))));
-    items = sortItems(items, $('#col-sort').value);
+    const groups = sortGroups(groupItems(items), $('#col-sort').value);
 
-    $('#collection-summary').innerHTML = summaryChips(items);
+    $('#collection-summary').innerHTML = summaryChips(items, groups.length);
     const grid = $('#collection-grid');
-    grid.replaceChildren(...items.map((i) => cardTile(i, { showOwner: state.owners.length > 1 })));
+    grid.replaceChildren(...groups.map(groupTile));
+    $('#col-count').textContent = groups.length ? `${groups.length} Karte${groups.length === 1 ? '' : 'n'} angezeigt` : '';
     const empty = $('#collection-empty');
     empty.hidden = items.length > 0;
     if (!items.length && owned.length) empty.textContent = 'Keine Karten passen zu diesem Filter.';
     else if (!owned.length) empty.innerHTML = 'Noch keine Karten hier. Geh auf <strong>Karten suchen</strong> und füge deine erste Karte hinzu!';
   }
+  $('#col-filter-toggle').addEventListener('click', () => {
+    const open = $('#col-filters').classList.toggle('open');
+    $('#col-filter-toggle').setAttribute('aria-expanded', String(open));
+  });
+  function updateFilterBadge() {
+    const n = ['#col-owner', '#col-set'].filter((x) => $(x).value).length + ['#col-fav', '#col-dupes'].filter((x) => $(x).checked).length;
+    $('#col-filter-toggle').textContent = n ? `Filter (${n})` : 'Filter';
+  }
+  ['#col-owner', '#col-set', '#col-fav', '#col-dupes'].forEach((x) => $(x).addEventListener('change', updateFilterBadge));
   ['#col-filter', '#col-owner', '#col-set', '#col-sort', '#col-fav', '#col-dupes'].forEach((s) =>
     $(s).addEventListener(s === '#col-filter' ? 'input' : 'change', renderCollection));
 
@@ -549,7 +683,7 @@
     if (!editing) return;
     if (!confirm(`„${editing.name}“ wirklich löschen?`)) return;
     state.items = state.items.filter((i) => i.id !== editing.id);
-    save(); dlg.close(); render(); toast('Karte gelöscht');
+    save(); dlg.close(); render(); renderGroupDialog(); toast('Karte gelöscht');
   });
 
   form.addEventListener('submit', (e) => {
@@ -599,6 +733,7 @@
     save();
     dlg.close();
     render();
+    renderGroupDialog();
   });
   dlg.addEventListener('close', () => { editing = null; draft = null; draftPricing = null; });
 
@@ -629,7 +764,7 @@
       const its = owned.filter((i) => i.owner === o.id);
       return { o, cards: its.reduce((s, i) => s + i.qty, 0), value: its.reduce((s, i) => s + totalValue(i), 0) };
     });
-    const top = sortItems(owned, 'value').filter((i) => unitValue(i) != null).slice(0, 10);
+    const top = sortGroups(groupItems(owned), 'value').filter((g) => g.value > 0).slice(0, 10);
     const bySet = groupSum(owned, (i) => i.setName, (i) => i.qty).slice(0, 10);
     const byRarity = groupSum(owned, (i) => i.rarity, (i) => i.qty).slice(0, 10);
     const byType = groupSum(owned.flatMap((i) => (i.types?.length ? i.types : [null]).map((t) => ({ ...i, _t: t }))), (i) => i._t, (i) => i.qty).slice(0, 10);
@@ -644,17 +779,17 @@
       ${noPrice ? `<p class="hint">${noPrice} Karte(n) ohne Preis – sie zählen im Gesamtwert nicht mit.</p>` : ''}
       <div class="stats-grid">
         <div class="panel"><h3>Wertvollste Karten</h3>
-          <ol class="top-list">${top.map((i) => `
-            <li data-id="${esc(i.id)}">${i.image ? `<img alt="" src="${esc(imageUrl(i.image))}">` : ''}
-              <div class="grow"><div><strong>${esc(i.name)}</strong>${i.qty > 1 ? ` ×${i.qty}` : ''}</div><div class="hint" style="margin:0">${esc(i.setName || '')}</div></div>
-              <strong>${fmtEur(unitValue(i))}</strong></li>`).join('')}</ol>
+          <ol class="top-list">${top.map((g) => `
+            <li data-key="${esc(g.key)}">${g.image ? `<img alt="" src="${esc(imageUrl(g.image))}">` : ''}
+              <div class="grow"><div><strong>${esc(g.name)}</strong>${g.qty > 1 ? ` · ${g.qty}×` : ''}</div><div class="hint" style="margin:0">${esc(g.setName || '')}${g.qty > 1 && g.unitMax != null ? ` · je ${fmtEur(g.unitMax)}` : ''}</div></div>
+              <strong>${fmtEur(g.value)}</strong></li>`).join('')}</ol>
         </div>
         ${state.owners.length > 1 ? `<div class="panel"><h3>Wert pro Sammler</h3>${barList(byOwner.map((x) => [x.o.name + ` (${x.cards})`, x.value, x.o.color]), fmtEur)}</div>` : ''}
         <div class="panel"><h3>Karten pro Set</h3>${barList(bySet)}</div>
         <div class="panel"><h3>Seltenheiten</h3>${barList(byRarity)}</div>
         <div class="panel"><h3>Typen</h3>${barList(byType)}</div>
       </div>`;
-    $$('.top-list li', box).forEach((li) => li.addEventListener('click', () => openItemDialog(state.items.find((i) => i.id === li.dataset.id))));
+    $$('.top-list li', box).forEach((li) => li.addEventListener('click', () => openGroupDialog(li.dataset.key)));
     $$('.top-list img', box).forEach(attachImgFallback);
   }
 
@@ -668,7 +803,7 @@
       li.innerHTML = `
         <input type="color" value="${esc(o.color)}" aria-label="Farbe">
         <input type="text" value="${esc(o.name)}" maxlength="30" aria-label="Name">
-        <span class="hint" style="margin:0">${count} Einträge</span>
+        <span class="hint" style="margin:0">${count} ${count === 1 ? 'Eintrag' : 'Einträge'}</span>
         <button type="button" class="danger" ${state.owners.length === 1 ? 'disabled' : ''}>Entfernen</button>`;
       const [color, name] = $$('input', li);
       color.addEventListener('change', () => { o.color = color.value; save(); });
@@ -692,30 +827,46 @@
     save(); renderSettings(); toast(`${name} hinzugefügt`);
   });
 
+  /** Lädt Cardmarket-Preise neu. onlyStale: nur Preise älter als 24 h. */
+  let refreshing = false;
+  async function refreshPrices({ onlyStale = false, onProgress } = {}) {
+    if (refreshing) return null;
+    const dayAgo = Date.now() - 24 * 3600 * 1000;
+    // Gleiche Karte nur einmal abfragen, Preis auf alle Einträge übertragen
+    const items = state.items.filter((i) => i.cardId && (!onlyStale || !i.price?.updatedAt || Date.parse(i.price.updatedAt) < dayAgo));
+    if (!items.length) return { updated: 0, failed: 0, total: 0 };
+    refreshing = true;
+    const byCard = new Map();
+    items.forEach((i) => { const k = (i.apiLang || 'de') + ':' + i.cardId; if (!byCard.has(k)) byCard.set(k, []); byCard.get(k).push(i); });
+    if (!onlyStale) cardCache.clear();
+    let done = 0, updated = 0, failed = 0;
+    const queue = [...byCard.values()];
+    const worker = async () => {
+      while (queue.length) {
+        const group = queue.shift();
+        try {
+          const c = await getCard(group[0].cardId, group[0].apiLang || 'de');
+          group.forEach((it) => { const p = pickPrice(c?.pricing, it.variant); if (p) { it.price = p; updated++; } });
+        } catch { failed += group.length; }
+        onProgress?.(++done, byCard.size);
+      }
+    };
+    try { await Promise.all([worker(), worker(), worker(), worker()]); }
+    finally { refreshing = false; }
+    save();
+    return { updated, failed, total: items.length };
+  }
+
   $('#refresh-prices').addEventListener('click', async () => {
     const btn = $('#refresh-prices');
     const status = $('#refresh-status');
-    const items = state.items.filter((i) => i.cardId);
-    if (!items.length) { status.textContent = 'Keine Karten mit Datenbank-Verknüpfung.'; return; }
     btn.disabled = true;
-    cardCache.clear();
-    let done = 0, updated = 0, failed = 0;
-    const queue = [...items];
-    const worker = async () => {
-      while (queue.length) {
-        const it = queue.shift();
-        try {
-          const c = await getCard(it.cardId, it.apiLang || 'de');
-          const p = pickPrice(c?.pricing, it.variant);
-          if (p) { it.price = p; updated++; }
-        } catch { failed++; }
-        status.textContent = `${++done} / ${items.length} …`;
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    save();
+    const r = await refreshPrices({ onProgress: (d, t) => { status.textContent = `${d} / ${t} …`; } });
     btn.disabled = false;
-    status.textContent = `Fertig: ${updated} Preise aktualisiert${failed ? `, ${failed} fehlgeschlagen` : ''}.`;
+    if (!r) status.textContent = 'Preise werden gerade schon aktualisiert.';
+    else if (!r.total) status.textContent = 'Keine Karten mit Datenbank-Verknüpfung.';
+    else status.textContent = `Fertig: ${r.updated} Preise aktualisiert${r.failed ? `, ${r.failed} fehlgeschlagen` : ''}.`;
+    render();
   });
 
   // ---------- Export / Import ----------
@@ -765,4 +916,13 @@
   };
 
   render();
+
+  // Preise automatisch aktuell halten: beim Öffnen alles älter als 24 h im Hintergrund nachladen
+  setTimeout(async () => {
+    if (!navigator.onLine) return;
+    try {
+      const r = await refreshPrices({ onlyStale: true });
+      if (r && r.updated) { render(); renderGroupDialog(); }
+    } catch (e) { console.warn('Preis-Aktualisierung fehlgeschlagen', e); }
+  }, 1500);
 })();
