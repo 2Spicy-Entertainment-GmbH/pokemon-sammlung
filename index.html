@@ -14,6 +14,7 @@
     </div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="collection" role="tab">Sammlung</button>
+      <button class="tab" data-view="scan" role="tab">Foto-Scan</button>
       <button class="tab" data-view="search" role="tab">Karten suchen</button>
       <button class="tab" data-view="wishlist" role="tab">Wunschliste</button>
       <button class="tab" data-view="stats" role="tab">Statistik</button>
@@ -37,11 +38,61 @@
           <option value="set">Set &amp; Nummer</option>
         </select>
         <label class="check"><input type="checkbox" id="col-fav"> nur Favoriten</label>
+        <label class="check"><input type="checkbox" id="col-dupes"> nur doppelte</label>
       </div>
       <div class="grid" id="collection-grid"></div>
       <p class="empty" id="collection-empty" hidden>
         Noch keine Karten hier. Geh auf <strong>Karten suchen</strong> und füge deine erste Karte hinzu!
       </p>
+    </section>
+
+    <!-- FOTO-SCAN -->
+    <section id="view-scan" class="view">
+      <div class="panel" id="scan-setup" hidden>
+        <h2>Foto-Scan einrichten</h2>
+        <p>Beim Foto-Scan erkennt Claude die Karten auf euren Fotos. Dafür braucht die App einmalig einen <strong>Claude-API-Schlüssel</strong>.</p>
+        <ol class="steps">
+          <li>Auf <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a> anmelden und unter <em>Billing</em> etwas Guthaben aufladen (5 € reichen für viele Fotos).</li>
+          <li>Unter <em>API Keys</em> → <em>Create Key</em> einen Schlüssel erstellen und kopieren.</li>
+          <li>Hier einfügen und speichern.</li>
+        </ol>
+        <form class="toolbar" id="scan-key-form">
+          <input type="password" id="scan-key" placeholder="sk-ant-…" autocomplete="off">
+          <button class="primary" type="submit">Speichern</button>
+        </form>
+        <p class="hint">Der Schlüssel bleibt nur auf diesem Gerät und wird direkt an Claude geschickt. Ein Foto kostet etwa 2–5 Cent.</p>
+      </div>
+
+      <div id="scan-main" hidden>
+        <div class="scan-actions" id="scan-drop">
+          <label class="button primary big">Foto aufnehmen
+            <input type="file" id="scan-camera" accept="image/*" capture="environment" hidden>
+          </label>
+          <label class="button big">Fotos auswählen
+            <input type="file" id="scan-files" accept="image/*" multiple hidden>
+          </label>
+          <p class="hint">Legt mehrere Karten nebeneinander auf einen ruhigen Untergrund, ohne Spiegelungen. Name und Nummer unten auf der Karte sollten lesbar sein. Ihr könnt beliebig viele Fotos nacheinander machen, gleiche Karten werden automatisch zusammengezählt.</p>
+        </div>
+        <ul class="scan-photos" id="scan-photos"></ul>
+        <div class="summary" id="scan-summary"></div>
+        <ul class="scan-results" id="scan-results"></ul>
+        <div class="panel" id="scan-unmatched" hidden>
+          <h3>Nicht eindeutig gefunden</h3>
+          <ul id="scan-unmatched-list" class="plain"></ul>
+        </div>
+        <div class="scan-footer">
+          <label class="check">Gehört <select id="scan-owner"></select></label>
+          <label class="check">Zustand
+            <select id="scan-condition">
+              <option value="MT">Mint</option><option value="NM" selected>Near Mint</option><option value="EX">Excellent</option>
+              <option value="GD">Good</option><option value="LP">Light Played</option><option value="PL">Played</option><option value="PO">Poor</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <button type="button" id="scan-clear" hidden>Liste leeren</button>
+          <button type="button" class="primary" id="scan-add" disabled>Zur Sammlung hinzufügen</button>
+        </div>
+      </div>
     </section>
 
     <!-- SUCHE -->
@@ -96,6 +147,15 @@
         <form class="toolbar" id="owner-form">
           <input type="text" id="owner-name" placeholder="Name des Sammlers" required maxlength="30">
           <button class="primary" type="submit">Hinzufügen</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Foto-Scan (Claude)</h2>
+        <p class="hint">Für die Kartenerkennung per Foto. Der Schlüssel wird nur auf diesem Gerät gespeichert. <span id="scan-key-status"></span></p>
+        <form class="toolbar" id="settings-key-form">
+          <input type="password" id="settings-key" placeholder="Neuen Schlüssel eintragen (sk-ant-…)" autocomplete="off">
+          <button type="submit">Speichern</button>
+          <button type="button" class="danger" id="settings-key-remove">Entfernen</button>
         </form>
       </div>
       <div class="panel">
@@ -208,5 +268,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
+  <script src="scan.js"></script>
 </body>
 </html>

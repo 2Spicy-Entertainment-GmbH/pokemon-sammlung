@@ -203,6 +203,8 @@
       ['Verschiedene', items.length.toLocaleString('de-DE')],
       ['Gesamtwert', fmtEur(value)],
     ];
+    const extra = items.reduce((s, i) => s + Math.max(0, (i.qty || 1) - 1), 0);
+    if (extra > 0) chips.push(['Doppelte', extra.toLocaleString('de-DE')]);
     if (paid > 0) chips.push(['Bezahlt', fmtEur(paid)]);
     return chips.map(([k, v]) => `<div class="chip"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   }
@@ -220,10 +222,14 @@
     if (sets.includes(prevSet)) setSel.value = prevSet;
 
     const q = $('#col-filter').value.trim().toLowerCase();
+    // Doppelte: dieselbe Karte mehr als einmal (auch über Besitzer/Zustände hinweg)
+    const dupes = {};
+    owned.forEach((i) => { const k = i.cardId || i.id; dupes[k] = (dupes[k] || 0) + (i.qty || 1); });
     let items = owned.filter((i) =>
       (!ownerSel.value || i.owner === ownerSel.value) &&
       (!setSel.value || i.setName === setSel.value) &&
       (!$('#col-fav').checked || i.favorite) &&
+      (!$('#col-dupes').checked || dupes[i.cardId || i.id] > 1) &&
       (!q || [i.name, i.setName, i.number, i.rarity, i.note].some((f) => String(f || '').toLowerCase().includes(q))));
     items = sortItems(items, $('#col-sort').value);
 
@@ -235,7 +241,7 @@
     if (!items.length && owned.length) empty.textContent = 'Keine Karten passen zu diesem Filter.';
     else if (!owned.length) empty.innerHTML = 'Noch keine Karten hier. Geh auf <strong>Karten suchen</strong> und füge deine erste Karte hinzu!';
   }
-  ['#col-filter', '#col-owner', '#col-set', '#col-sort', '#col-fav'].forEach((s) =>
+  ['#col-filter', '#col-owner', '#col-set', '#col-sort', '#col-fav', '#col-dupes'].forEach((s) =>
     $(s).addEventListener(s === '#col-filter' ? 'input' : 'change', renderCollection));
 
   // ---------- Wunschliste ----------
@@ -749,6 +755,14 @@
 
   // Änderungen aus anderem Tab übernehmen
   window.addEventListener('storage', (e) => { if (e.key === STORAGE_KEY) { state = load(); render(); } });
+
+  // Schnittstelle für scan.js (Foto-Erkennung)
+  window.PokeApp = {
+    get state() { return state; },
+    save, render, toast, esc, fmtEur, imageUrl, attachImgFallback, getCard, searchCards, withImage,
+    cardToDraft, pickPrice, addOrMerge, uid, fillOwnerSelect, ownedCountByCardId, CONDITIONS, VARIANTS,
+    showView,
+  };
 
   render();
 })();
